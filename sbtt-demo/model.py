@@ -11,7 +11,8 @@ class SequentialAutoencoder(pl.LightningModule):
                  learning_rate=1e-3,
                  weight_decay=1e-4,
                  rate_conversion_factor=0.05,
-                 dropout=0.1):
+                 dropout=0.1,
+                 loss_type="input"):
         super().__init__()
         self.save_hyperparameters()
         # Instantiate bidirectional GRU encoder
@@ -74,7 +75,11 @@ class SequentialAutoencoder(pl.LightningModule):
         x_obs = torch.masked_select(x, mask)
         logrates_obs = torch.masked_select(logrates, mask)
         # Compute Poisson log-likelihood
-        loss = nn.functional.poisson_nll_loss(logrates_obs, x_obs)
+        if self.hparams.loss_type == "input":
+            loss = nn.functional.poisson_nll_loss(logrates_obs, x_obs)
+        elif self.hparams.loss_type == "ground_truth":
+            truth_obs = torch.masked_select(truth, mask)
+            loss = nn.functional.poisson_nll_loss(logrates_obs, truth_obs)
         # loss = nn.functional.mse_loss(logrates_obs, x_obs) # changed poisson loss to MSE loss
         self.log('train_loss', loss, on_epoch=True)
         self.log('train_nll', loss, on_epoch=True)
@@ -100,7 +105,11 @@ class SequentialAutoencoder(pl.LightningModule):
         x_obs = torch.masked_select(x, mask)
         logrates_obs = torch.masked_select(logrates, mask)
         # Compute Poisson log-likelihood
-        loss = nn.functional.poisson_nll_loss(logrates_obs, x_obs)
+        if self.hparams.loss_type == "input":
+            loss = nn.functional.poisson_nll_loss(logrates_obs, x_obs)
+        elif self.hparams.loss_type == "ground_truth":
+            truth_obs = torch.masked_select(truth, mask)
+            loss = nn.functional.poisson_nll_loss(logrates_obs, truth_obs)
         # loss = nn.functional.mse_loss(logrates_obs, x_obs) # Changed Poisson loss to MSE loss
         self.log('valid_loss', loss, on_epoch=True)
         self.log('valid_nll', loss, on_epoch=True)
