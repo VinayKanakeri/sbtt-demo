@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pytorch_lightning as pl
 from torch import nn
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error
 
 class SequentialAutoencoder(pl.LightningModule):
     def __init__(self, 
@@ -75,6 +75,7 @@ class SequentialAutoencoder(pl.LightningModule):
         logrates_obs = torch.masked_select(logrates, mask)
         # Compute Poisson log-likelihood
         loss = nn.functional.poisson_nll_loss(logrates_obs, x_obs)
+        # loss = nn.functional.mse_loss(logrates_obs, x_obs) # changed poisson loss to MSE loss
         self.log('train_loss', loss, on_epoch=True)
         self.log('train_nll', loss, on_epoch=True)
         # Compute match to true rates
@@ -83,8 +84,10 @@ class SequentialAutoencoder(pl.LightningModule):
         rates *= self.hparams.rate_conversion_factor
         truth = np.concatenate([*truth])
         rates = np.concatenate([*rates])
-        r2 = r2_score(truth, rates)
-        self.log('train_r2', r2, on_epoch=True)
+        # r2 = r2_score(truth, rates)
+        mse = np.average(np.square((truth - rates)/truth))
+        # mse = mean_squared_error(truth, rates)
+        self.log('train_mse', mse, on_epoch=True)
         return loss
     
     def validation_step(self, batch, batch_ix):
@@ -98,6 +101,7 @@ class SequentialAutoencoder(pl.LightningModule):
         logrates_obs = torch.masked_select(logrates, mask)
         # Compute Poisson log-likelihood
         loss = nn.functional.poisson_nll_loss(logrates_obs, x_obs)
+        # loss = nn.functional.mse_loss(logrates_obs, x_obs) # Changed Poisson loss to MSE loss
         self.log('valid_loss', loss, on_epoch=True)
         self.log('valid_nll', loss, on_epoch=True)
         truth = truth.detach().cpu().numpy()
@@ -105,6 +109,8 @@ class SequentialAutoencoder(pl.LightningModule):
         rates *= self.hparams.rate_conversion_factor
         truth = np.concatenate([*truth])
         rates = np.concatenate([*rates])
-        r2 = r2_score(truth, rates)
-        self.log('valid_r2', r2, on_epoch=True)
+        # r2 = r2_score(truth, rates)
+        mse = np.average(np.square((truth - rates)/truth))
+        # mse = mean_squared_error(truth, rates)
+        self.log('valid_mse', mse, on_epoch=True)
         return loss

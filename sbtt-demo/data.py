@@ -14,9 +14,17 @@ def mask_data(data, bandwidth, rng):
             nan_mask[i, j, sampled_ixs] = 1.0
     return data * nan_mask
 
+def uniform_mask_data(data, bandwidth):
+    nan_mask = np.full(data.shape, np.nan)
+    for i, sample in enumerate(data):
+        for j, timestep in enumerate(sample):
+            sampled_ixs = np.int32(np.linspace(0, len(timestep)-1, bandwidth))
+            nan_mask[i, j, sampled_ixs] = 1.0
+    return data * nan_mask
+
 
 class LorenzDataModule(pl.LightningDataModule):
-    def __init__(self, data_path, bandwidth=None, batch_size=64, num_workers=4, seed=0):
+    def __init__(self, data_path, bandwidth=None, batch_size=64, num_workers=4, mask_type='random', seed=0):
         super().__init__()
         self.save_hyperparameters()
         self.rng = np.random.RandomState(seed=seed)
@@ -32,8 +40,13 @@ class LorenzDataModule(pl.LightningDataModule):
         valid_rates = data_dict['valid_truth']
         # Simulate bandwidth-limited sampling
         if hps.bandwidth is not None:
-            train_spikes = mask_data(train_spikes, hps.bandwidth, self.rng)
-            valid_spikes = mask_data(valid_spikes, hps.bandwidth, self.rng)
+            if hps.mask_type == 'random':
+                train_spikes = mask_data(train_spikes, hps.bandwidth, self.rng)
+                valid_spikes = mask_data(valid_spikes, hps.bandwidth, self.rng)
+            elif hps.mask_type == 'uniform':
+                train_spikes = uniform_mask_data(train_spikes, hps.bandwidth)
+                valid_spikes = uniform_mask_data(valid_spikes, hps.bandwidth)
+
         # Convert data to Tensors
         train_spikes = torch.tensor(train_spikes, dtype=torch.float)
         valid_spikes = torch.tensor(valid_spikes, dtype=torch.float)
