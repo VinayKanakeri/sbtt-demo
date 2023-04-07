@@ -8,6 +8,7 @@ from glob import glob
 from data import LorenzDataModule
 from model import SequentialAutoencoder
 import argparse
+import numpy as np
 
 parser = argparse.ArgumentParser()
 
@@ -19,7 +20,7 @@ args = parser.parse_args()
 eval_dir = args.eval_dir
 mask_type = args.mask_type
 data_path = args.data_path
-
+train_info = eval_dir.split('lightning_logs_')[1]
 TOTAL_OBS = 29
 # model_data = {
 #     29: eval_dir + '/version_0',
@@ -65,16 +66,21 @@ for bandwidth, model_dir in model_data.items():
         ax_row[0].imshow(valid_spikes[0].T)
         ax_row[1].imshow(valid_truth[0].T)
         ax_row[2].imshow(valid_rates[0].T)
-    fig.suptitle(f'rate recovery, bandwidth: {bandwidth}')
+    fig.suptitle(f'rate recovery - train: {train_info}, eval: {mask_type}, bandwidth: {bandwidth}')
     plt.tight_layout()
+    if bandwidth == 15:
+        plt.savefig(train_info + '_eval_' + mask_type + '_samples.png')
 results = pd.DataFrame(results)
-plt.figure(figsize=(3, 2.5))
+plt.figure()
 plt.plot(results.drop_ratio, results.valid_mse, marker='o', color='slateblue')
 # plt.xlim(-0.1, 1.1)
 # plt.ylim(0, 1)
 plt.xlabel('Fraction dropped samples')
 plt.ylabel('MSE')
+plt.title(f'train: {train_info}, eval: {mask_type}')
 plt.grid()
 plt.tight_layout()
-plt.savefig('result.png')
+plt.savefig(train_info + '_eval_' + mask_type + '_result.png')
+np.save(train_info + '_eval_' + mask_type + '_result_mse.npy', np.array(results.valid_mse))
+np.save(train_info + '_eval_' + mask_type + '_result_drop_ratio.npy', np.array(results.drop_ratio))
 plt.show()

@@ -90,8 +90,8 @@ class SequentialAutoencoder(pl.LightningModule):
         truth = np.concatenate([*truth])
         rates = np.concatenate([*rates])
         # r2 = r2_score(truth, rates)
-        mse = np.average(np.square((truth - rates)/truth))
-        # mse = mean_squared_error(truth, rates)
+        # mse = np.average(np.square((truth - rates)/truth))
+        mse = mean_squared_error(truth, rates)
         self.log('train_mse', mse, on_epoch=True)
         return loss
     
@@ -119,7 +119,7 @@ class SequentialAutoencoder(pl.LightningModule):
         truth = np.concatenate([*truth])
         rates = np.concatenate([*rates])
         # r2 = r2_score(truth, rates)
-        mse = np.average(np.square((truth - rates)/truth))
-        # mse = mean_squared_error(truth, rates)
+        # mse = np.average(np.square((truth - rates)/truth))
+        mse = mean_squared_error(truth, rates)
         self.log('valid_mse', mse, on_epoch=True)
         return loss
