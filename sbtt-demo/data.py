@@ -14,6 +14,15 @@ def mask_data(data, bandwidth, rng):
             nan_mask[i, j, sampled_ixs] = 1.0
     return data * nan_mask
 
+def mask_data_time(data, bandwidth, rng):
+    nan_mask = np.full(data.shape, np.nan)
+    for i, sample in enumerate(data):
+        for j in range(np.shape(sample)[1]):
+            time_ixs = np.arange(np.shape(sample)[0])
+            sampled_ixs = rng.choice(time_ixs, size=bandwidth, replace=False)
+            nan_mask[i, sampled_ixs, j] = 1.0
+    return data * nan_mask
+
 def uniform_mask_data(data, bandwidth):
     nan_mask = np.full(data.shape, np.nan)
     for i, sample in enumerate(data):
@@ -22,9 +31,17 @@ def uniform_mask_data(data, bandwidth):
             nan_mask[i, j, sampled_ixs] = 1.0
     return data * nan_mask
 
+def uniform_mask_data_time(data, bandwidth):
+    nan_mask = np.full(data.shape, np.nan)
+    for i, sample in enumerate(data):
+        for j in range(np.shape(sample)[1]):
+            sampled_ixs = np.int32(np.linspace(0, np.shape(sample)[0]-1, bandwidth))
+            nan_mask[i, sampled_ixs, j] = 1.0
+    return data * nan_mask
+
 
 class LorenzDataModule(pl.LightningDataModule):
-    def __init__(self, data_path, bandwidth=None, batch_size=64, num_workers=4, mask_type='random', seed=0):
+    def __init__(self, data_path, bandwidth=None, batch_size=64, num_workers=4, mask_type='random', mask_axis='neuron', dont_mask=False, seed=0):
         super().__init__()
         self.save_hyperparameters()
         self.rng = np.random.RandomState(seed=seed)
@@ -39,13 +56,22 @@ class LorenzDataModule(pl.LightningDataModule):
         train_rates = data_dict['train_truth']
         valid_rates = data_dict['valid_truth']
         # Simulate bandwidth-limited sampling
-        if hps.bandwidth is not None:
-            if hps.mask_type == 'random':
-                train_spikes = mask_data(train_spikes, hps.bandwidth, self.rng)
-                valid_spikes = mask_data(valid_spikes, hps.bandwidth, self.rng)
-            elif hps.mask_type == 'uniform':
-                train_spikes = uniform_mask_data(train_spikes, hps.bandwidth)
-                valid_spikes = uniform_mask_data(valid_spikes, hps.bandwidth)
+        if not(hps.dont_mask):
+            if hps.bandwidth is not None:
+                if hps.mask_type == 'random':
+                    if hps.mask_axis == 'neuron':
+                        train_spikes = mask_data(train_spikes, hps.bandwidth, self.rng)
+                        valid_spikes = mask_data(valid_spikes, hps.bandwidth, self.rng)
+                    elif hps.mask_axis == 'time':
+                        train_spikes = mask_data_time(train_spikes, hps.bandwidth, self.rng)
+                        valid_spikes = mask_data_time(valid_spikes, hps.bandwidth, self.rng)
+                elif hps.mask_type == 'uniform':
+                    if hps.mask_axis == 'neuron':
+                        train_spikes = uniform_mask_data(train_spikes, hps.bandwidth)
+                        valid_spikes = uniform_mask_data(valid_spikes, hps.bandwidth)
+                    elif hps.mask_axis == 'time':
+                        train_spikes = uniform_mask_data_time(train_spikes, hps.bandwidth)
+                        valid_spikes = uniform_mask_data_time(valid_spikes, hps.bandwidth)
 
         # Convert data to Tensors
         train_spikes = torch.tensor(train_spikes, dtype=torch.float)

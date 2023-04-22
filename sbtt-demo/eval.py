@@ -14,14 +14,17 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('-d', '--eval_dir', help="Directory for stored checkpoints", type=str, default='lightning_logs')
 parser.add_argument('-m', '--mask_type', help="Mask type: random or uniform", type=str, default='random')
+parser.add_argument('-ma', '--mask_axis', help="Mask axis: time or neuron", type=str, default='neuron')
 parser.add_argument('-dp', '--data_path', help="Data path", type=str, default='loenz_dataset.h5')
 args = parser.parse_args()
 
 eval_dir = args.eval_dir
 mask_type = args.mask_type
 data_path = args.data_path
+mask_axis = args.mask_axis
+
 train_info = eval_dir.split('lightning_logs_')[1]
-TOTAL_OBS = 29
+
 # model_data = {
 #     29: eval_dir + '/version_0',
 #     25: eval_dir + '/version_1',
@@ -33,13 +36,25 @@ TOTAL_OBS = 29
 #     2: eval_dir + '/version_7',
 # }
 
-model_data = {
-    29: eval_dir + '/version_0',
-    25: eval_dir + '/version_1',
-    15: eval_dir + '/version_2',
-    5: eval_dir + '/version_3',
-    2: eval_dir + '/version_4',
-}
+if mask_axis == 'neuron':
+    TOTAL_OBS = 29
+    model_data = {
+        29: eval_dir + '/version_0',
+        25: eval_dir + '/version_1',
+        15: eval_dir + '/version_2',
+        5: eval_dir + '/version_3',
+        2: eval_dir + '/version_4',
+    }
+elif mask_axis == 'time':
+    TOTAL_OBS = 50
+    model_data = {
+        50: eval_dir + '/version_0',
+        45: eval_dir + '/version_1',
+        35: eval_dir + '/version_2',
+        25: eval_dir + '/version_3',
+        15: eval_dir + '/version_4',
+        5: eval_dir + '/version_5',
+    } 
 
 results = []
 for bandwidth, model_dir in model_data.items():
@@ -47,7 +62,11 @@ for bandwidth, model_dir in model_data.items():
     ckpt_pattern = os.path.join(model_dir, 'checkpoints/*.ckpt')
     ckpt_path = sorted(glob(ckpt_pattern))[0]
     model = SequentialAutoencoder.load_from_checkpoint(ckpt_path)
-    datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type)
+    if 'Oasis' in data_path:
+        data_path = data_path + str(bandwidth) + '.h5'
+        datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis, dont_mask=True)
+    else:
+        datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis)
     # Create a trainer
     trainer = pl.Trainer(logger=False, devices=int(torch.cuda.is_available()), accelerator='gpu')
     # trainer = pl.Trainer(logger=False)

@@ -3,11 +3,12 @@ import numpy as np
 import pytorch_lightning as pl
 from torch import nn
 from sklearn.metrics import r2_score, mean_squared_error
+from zig_distribution import zeroInflatedGamma
 
 class SequentialAutoencoder(pl.LightningModule):
     def __init__(self, 
-                 input_size=29, 
-                 hidden_size=50,
+                 input_size=29, # Number of neurons , Bandwidth corresponds to the number of neurons observed at each timestep
+                 hidden_size=50, # Number of timesteps
                  learning_rate=1e-3,
                  weight_decay=1e-4,
                  rate_conversion_factor=0.05,
@@ -35,6 +36,20 @@ class SequentialAutoencoder(pl.LightningModule):
             in_features=hidden_size,
             out_features=input_size,
         )
+
+        self.factors_map_alpha_beta = nn.Linear(
+            in_features=hidden_size,
+            out_features=2*input_size,
+        )
+
+        self.factors_map_q = nn.Linear(
+            in_features=hidden_size,
+            out_features=input_size,
+        )
+
+        self.alpha_beta_non_linearity = nn.ReLU()
+        self.q_non_linearity = nn.Sigmoid()
+
         # Instantiate dropout
         self.dropout = nn.Dropout(p=dropout)
 
@@ -53,9 +68,16 @@ class SequentialAutoencoder(pl.LightningModule):
         # Unroll the decoder
         ic_drop = self.dropout(ic)
         latents, _ = self.decoder(input_placeholder, torch.unsqueeze(ic_drop, 0))
-        # Map decoder state to logrates
-        logrates = self.readout(latents)
-        return logrates
+        if self.hparams.loss_type == 'input' or self.hparams.loss_type == 'ground_truth':
+            # Map decoder state to logrates
+            logrates = self.readout(latents)
+            return logrates
+        elif self.hparams.loss_type == 'zi_gamma':
+            alpha_beta = self.factors_map_alpha_beta(latents)
+            alpha_beta_nl = self.alpha_beta_non_linearity(alpha_beta)
+            q = self.factors_map_q(latents)
+            q_nl = self.q_non_linearity(q)
+            return alpha_beta_nl, q_nl
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
@@ -65,21 +87,35 @@ class SequentialAutoencoder(pl.LightningModule):
         )
         return optimizer
     
+    def zig_loss(self):
+        total_loss = self.l2_weight * self.l2_cost + self.kl_weight * self.kl_cost + self.rec_cost_heldin
+        pass
+    
     def training_step(self, batch, batch_ix):
         x, truth = batch
         # Keep track of location of observed data
         mask = ~torch.isnan(x)
         # Pass data through the model
-        logrates = self.forward(x)
-        # Mask unobserved steps
-        x_obs = torch.masked_select(x, mask)
-        logrates_obs = torch.masked_select(logrates, mask)
+        if self.hparams.loss_type == 'input' or self.hparams.loss_type == 'ground_truth':
+            logrates = self.forward(x)
+            # Mask unobserved steps
+            x_obs = torch.masked_select(x, mask)
+            logrates_obs = torch.masked_select(logrates, mask)
+        elif self.hparams.loss_type == 'zi_gamma':
+            alpha_beta_nl, q_nl = self.forward(x)
+            # Mask unobserved steps
+            x_obs = torch.masked_select(x, mask)
+            alpha_beta_nl_obs = torch.masked_select(alpha_beta_nl, mask)
+            q_nl_obs = torch.masked_select(q_nl, mask)
+        
         # Compute Poisson log-likelihood
         if self.hparams.loss_type == "input":
             loss = nn.functional.poisson_nll_loss(logrates_obs, x_obs)
         elif self.hparams.loss_type == "ground_truth":
             truth_obs = torch.masked_select(truth, mask)
             loss = nn.functional.poisson_nll_loss(logrates_obs, truth_obs)
+        elif self.hparams.loss_type == 'zi_gamma':
+            loss = -torch.mean(zeroInflatedGamma(alpha_beta_nl_obs[..., ::2], alpha_beta_nl_obs[..., 1::2] , q_nl_obs).log_prob_ZIG(x_obs))
         # loss = nn.functional.mse_loss(logrates_obs, x_obs) # changed poisson loss to MSE loss
         self.log('train_loss', loss, on_epoch=True)
         self.log('train_nll', loss, on_epoch=True)

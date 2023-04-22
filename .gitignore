@@ -10,6 +10,8 @@ __pycache__/
 .Python
 build/
 lightning_logs*/
+lightning_logs*
+*events.out*
 develop-eggs/
 dist/
 downloads/
