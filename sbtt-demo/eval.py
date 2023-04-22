@@ -63,8 +63,8 @@ for bandwidth, model_dir in model_data.items():
     ckpt_path = sorted(glob(ckpt_pattern))[0]
     model = SequentialAutoencoder.load_from_checkpoint(ckpt_path)
     if 'Oasis' in data_path:
-        data_path = data_path + str(bandwidth) + '.h5'
-        datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis, dont_mask=True)
+        data_path_oasis = data_path + str(bandwidth) + '.h5'
+        datamodule = LorenzDataModule(data_path_oasis, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis, dont_mask=True)
     else:
         datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis)
     # Create a trainer

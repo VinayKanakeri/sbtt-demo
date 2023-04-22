@@ -32,8 +32,8 @@ if mask_axis == 'neuron':
 elif mask_axis == 'time':
     for bandwidth in [50, 45, 35, 25, 15, 5]:
         if 'Oasis' in data_path:
-            data_path = data_path + str(bandwidth) + '.h5'
-            datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis, dont_mask=True)
+            data_path_oasis = data_path + str(bandwidth) + '.h5'
+            datamodule = LorenzDataModule(data_path_oasis, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis, dont_mask=True)
         else:
             datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis)
         model = SequentialAutoencoder(loss_type=loss_type)
