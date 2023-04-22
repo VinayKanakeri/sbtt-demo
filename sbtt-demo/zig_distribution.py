@@ -6,7 +6,7 @@ class zeroInflatedGamma(object):
     # self.output = linear transform
     # self.output_nl = nonlinear transform
 
-    def __init__(self, alpha, beta, q, s_min):
+    def __init__(self, alpha, beta, q, s_min=0.3):
         # must return "as_list" to get ints
         #input_size = alpha.get_shape().as_list()[2]
         self.alpha = alpha
