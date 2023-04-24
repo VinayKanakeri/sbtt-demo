@@ -14,7 +14,7 @@ class SequentialAutoencoder(pl.LightningModule):
                  rate_conversion_factor=0.05,
                  dropout=0.1,
                  loss_type="input",
-                 s_min=0.3):
+                 s_min=0.0):
         super().__init__()
         self.save_hyperparameters()
         # Instantiate bidirectional GRU encoder
@@ -48,7 +48,7 @@ class SequentialAutoencoder(pl.LightningModule):
             out_features=input_size,
         )
 
-        self.alpha_beta_non_linearity = nn.ReLU()
+        self.alpha_beta_non_linearity = nn.Sigmoid()
         self.q_non_linearity = nn.Sigmoid()
 
         # Instantiate dropout
@@ -106,7 +106,8 @@ class SequentialAutoencoder(pl.LightningModule):
             alpha_beta_nl, q_nl = self.forward(x)
             # Mask unobserved steps
             x_obs = torch.masked_select(x, mask)
-            alpha_beta_nl_obs = torch.masked_select(alpha_beta_nl, mask)
+            alpha_nl_obs = torch.masked_select(alpha_beta_nl[..., ::2], mask)
+            beta_nl_obs = torch.masked_select(alpha_beta_nl[..., 1::2], mask)
             q_nl_obs = torch.masked_select(q_nl, mask)
         
         # Compute Poisson log-likelihood
@@ -116,7 +117,7 @@ class SequentialAutoencoder(pl.LightningModule):
             truth_obs = torch.masked_select(truth, mask)
             loss = nn.functional.poisson_nll_loss(logrates_obs, truth_obs)
         elif self.hparams.loss_type == 'zi_gamma':
-            loss = -torch.mean(zeroInflatedGamma(alpha_beta_nl_obs[..., ::2], alpha_beta_nl_obs[..., 1::2] , q_nl_obs, self.hparams.s_min).log_prob_ZIG(x_obs))
+            loss = -torch.mean(zeroInflatedGamma(alpha_nl_obs, beta_nl_obs , q_nl_obs, self.hparams.s_min).log_prob_ZIG(x_obs))
         # loss = nn.functional.mse_loss(logrates_obs, x_obs) # changed poisson loss to MSE loss
         self.log('train_loss', loss, on_epoch=True)
         self.log('train_nll', loss, on_epoch=True)
@@ -127,7 +128,7 @@ class SequentialAutoencoder(pl.LightningModule):
             rates *= self.hparams.rate_conversion_factor
         elif self.hparams.loss_type == 'zi_gamma':
             rates = q_nl*(alpha_beta_nl[..., ::2]*alpha_beta_nl[..., 1::2] + self.hparams.s_min)
-        
+            rates = rates.detach().cpu().numpy()
         truth = np.concatenate([*truth])
         rates = np.concatenate([*rates])
         # r2 = r2_score(truth, rates)
@@ -150,7 +151,8 @@ class SequentialAutoencoder(pl.LightningModule):
             alpha_beta_nl, q_nl = self.forward(x)
             # Mask unobserved steps
             x_obs = torch.masked_select(x, mask)
-            alpha_beta_nl_obs = torch.masked_select(alpha_beta_nl, mask)
+            alpha_nl_obs = torch.masked_select(alpha_beta_nl[..., ::2], mask)
+            beta_nl_obs = torch.masked_select(alpha_beta_nl[..., 1::2], mask)
             q_nl_obs = torch.masked_select(q_nl, mask)
         
         # Compute Poisson log-likelihood
@@ -160,7 +162,7 @@ class SequentialAutoencoder(pl.LightningModule):
             truth_obs = torch.masked_select(truth, mask)
             loss = nn.functional.poisson_nll_loss(logrates_obs, truth_obs)
         elif self.hparams.loss_type == 'zi_gamma':
-            loss = -torch.mean(zeroInflatedGamma(alpha_beta_nl_obs[..., ::2], alpha_beta_nl_obs[..., 1::2] , q_nl_obs, self.hparams.s_min).log_prob_ZIG(x_obs))
+            loss = -torch.mean(zeroInflatedGamma(alpha_nl_obs, beta_nl_obs , q_nl_obs, self.hparams.s_min).log_prob_ZIG(x_obs))
         # loss = nn.functional.mse_loss(logrates_obs, x_obs) # changed poisson loss to MSE loss
         self.log('valid_loss', loss, on_epoch=True)
         self.log('valid_nll', loss, on_epoch=True)
@@ -170,6 +172,7 @@ class SequentialAutoencoder(pl.LightningModule):
             rates *= self.hparams.rate_conversion_factor
         elif self.hparams.loss_type == 'zi_gamma':
             rates = q_nl*(alpha_beta_nl[..., ::2]*alpha_beta_nl[..., 1::2] + self.hparams.s_min)
+            rates = rates.detach().cpu().numpy()
         truth = np.concatenate([*truth])
         rates = np.concatenate([*rates])
         # r2 = r2_score(truth, rates)
