@@ -60,6 +60,7 @@ results = []
 for bandwidth, model_dir in model_data.items():
     # Load the model
     ckpt_pattern = os.path.join(model_dir, 'checkpoints/*.ckpt')
+    print(f'CKPT pattern: {ckpt_pattern}')
     ckpt_path = sorted(glob(ckpt_pattern))[0]
     model = SequentialAutoencoder.load_from_checkpoint(ckpt_path)
     if 'Oasis' in data_path:
@@ -79,8 +80,13 @@ for bandwidth, model_dir in model_data.items():
     dataloader = datamodule.val_dataloader()
     for i, (ax_row, batch) in enumerate(zip(axes, dataloader)):
         valid_spikes, valid_truth = batch
-        valid_logrates = model(valid_spikes)
-        valid_rates = torch.exp(valid_logrates).detach().numpy() * 0.05
+        if 'Oasis' in data_path:
+            alpha_beta_nl, q_nl = model(valid_spikes)
+            rates = q_nl*(alpha_beta_nl[..., ::2]*alpha_beta_nl[..., 1::2])
+            valid_rates = rates.detach().cpu().numpy() 
+        else:
+            valid_logrates = model(valid_spikes)
+            valid_rates = torch.exp(valid_logrates).detach().numpy() * 0.05
         # Plot just the first sample from each batch
         ax_row[0].imshow(valid_spikes[0].T)
         ax_row[1].imshow(valid_truth[0].T)

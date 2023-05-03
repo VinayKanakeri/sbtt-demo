@@ -36,7 +36,7 @@ elif mask_axis == 'time':
             datamodule = LorenzDataModule(data_path_oasis, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis, dont_mask=True)
         else:
             datamodule = LorenzDataModule(data_path, bandwidth=bandwidth, mask_type=mask_type, mask_axis=mask_axis)
-        model = SequentialAutoencoder(loss_type=loss_type)
+        model = SequentialAutoencoder(loss_type=loss_type, s_min=0.0)
         trainer = pl.Trainer(
             callbacks=[
                 pl.callbacks.ModelCheckpoint(monitor='valid_loss'),
