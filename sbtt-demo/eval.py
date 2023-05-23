@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--eval_dir', help="Directory for stored checkpoints", type=str, default='lightning_logs')
 parser.add_argument('-m', '--mask_type', help="Mask type: random or uniform", type=str, default='random')
 parser.add_argument('-ma', '--mask_axis', help="Mask axis: time or neuron", type=str, default='neuron')
-parser.add_argument('-dp', '--data_path', help="Data path", type=str, default='loenz_dataset.h5')
+parser.add_argument('-dp', '--data_path', help="Data path", type=str, default='lorenz_dataset.h5')
 args = parser.parse_args()
 
 eval_dir = args.eval_dir
@@ -24,6 +24,9 @@ data_path = args.data_path
 mask_axis = args.mask_axis
 
 train_info = eval_dir.split('lightning_logs_')[1]
+train_mask = train_info.split('_')[0]
+dataset = train_info.split('_')[1]
+sampling_axis = train_info.split('_')[2]
 
 # model_data = {
 #     29: eval_dir + '/version_0',
@@ -45,17 +48,24 @@ if mask_axis == 'neuron':
         5: eval_dir + '/version_3',
         2: eval_dir + '/version_4',
     }
+# elif mask_axis == 'time':
+#     TOTAL_OBS = 50
+#     model_data = {
+#         50: eval_dir + '/version_0',
+#         45: eval_dir + '/version_1',
+#         35: eval_dir + '/version_2',
+#         25: eval_dir + '/version_3',
+#         15: eval_dir + '/version_4',
+#         5: eval_dir + '/version_5',
+#     } 
 elif mask_axis == 'time':
     TOTAL_OBS = 50
     model_data = {
         50: eval_dir + '/version_0',
-        45: eval_dir + '/version_1',
-        35: eval_dir + '/version_2',
-        25: eval_dir + '/version_3',
-        15: eval_dir + '/version_4',
-        5: eval_dir + '/version_5',
+        25: eval_dir + '/version_1',
+        15: eval_dir + '/version_2',
+        5: eval_dir + '/version_3',
     } 
-
 results = []
 for bandwidth, model_dir in model_data.items():
     # Load the model
@@ -76,7 +86,7 @@ for bandwidth, model_dir in model_data.items():
     result['drop_ratio'] = 1 - bandwidth / TOTAL_OBS
     results.append(result)
     # Plot examples
-    fig, axes = plt.subplots(nrows=5, ncols=3, sharex=True, sharey=True)
+    fig, axes = plt.subplots(figsize=(20, 15), nrows=5, ncols=3, sharex=True, sharey=True)
     dataloader = datamodule.val_dataloader()
     for i, (ax_row, batch) in enumerate(zip(axes, dataloader)):
         valid_spikes, valid_truth = batch
@@ -88,21 +98,28 @@ for bandwidth, model_dir in model_data.items():
             valid_logrates = model(valid_spikes)
             valid_rates = torch.exp(valid_logrates).detach().numpy() * 0.05
         # Plot just the first sample from each batch
-        ax_row[0].imshow(valid_spikes[0].T)
-        ax_row[1].imshow(valid_truth[0].T)
-        ax_row[2].imshow(valid_rates[0].T)
-    fig.suptitle(f'rate recovery - train: {train_info}, eval: {mask_type}, bandwidth: {bandwidth}')
+        if i == 0:
+            ax_row[0].imshow(valid_spikes[0].T)            
+            ax_row[1].imshow(valid_truth[0].T)
+            ax_row[2].imshow(valid_rates[0].T)
+            ax_row[0].set_title('Input spikes')
+            ax_row[1].set_title('True rates')
+            ax_row[2].set_title('Recovered rates')
+        else:
+            ax_row[0].imshow(valid_spikes[0].T)            
+            ax_row[1].imshow(valid_truth[0].T)
+            ax_row[2].imshow(valid_rates[0].T)
+    fig.suptitle(f'Rate recovery - data: {dataset}, sampling axis: {sampling_axis}, train mask: {train_mask}, eval mask: {mask_type}, bandwidth: {bandwidth}')
     plt.tight_layout()
-    if bandwidth == 15:
-        plt.savefig(train_info + '_eval_' + mask_type + '_samples.png')
+    plt.savefig(train_info + '_eval_' + mask_type + '_samples_' + str(bandwidth) + '.png')
 results = pd.DataFrame(results)
-plt.figure()
+plt.figure(figsize=(20, 15))
 plt.plot(results.drop_ratio, results.valid_mse, marker='o', color='slateblue')
 # plt.xlim(-0.1, 1.1)
 # plt.ylim(0, 1)
 plt.xlabel('Fraction dropped samples')
 plt.ylabel('MSE')
-plt.title(f'train: {train_info}, eval: {mask_type}')
+plt.title(f'MSE - data: {dataset}, sampling axis: {sampling_axis}, train mask: {train_mask}, eval mask: {mask_type}')
 plt.grid()
 plt.tight_layout()
 plt.savefig(train_info + '_eval_' + mask_type + '_result.png')

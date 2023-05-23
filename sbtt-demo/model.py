@@ -37,19 +37,19 @@ class SequentialAutoencoder(pl.LightningModule):
             in_features=hidden_size,
             out_features=input_size,
         )
+        if loss_type == 'zi_gamma':
+            self.factors_map_alpha_beta = nn.Linear(
+                in_features=hidden_size,
+                out_features=2*input_size,
+            )
 
-        self.factors_map_alpha_beta = nn.Linear(
-            in_features=hidden_size,
-            out_features=2*input_size,
-        )
+            self.factors_map_q = nn.Linear(
+                in_features=hidden_size,
+                out_features=input_size,
+            )
 
-        self.factors_map_q = nn.Linear(
-            in_features=hidden_size,
-            out_features=input_size,
-        )
-
-        self.alpha_beta_non_linearity = nn.Sigmoid()
-        self.q_non_linearity = nn.Sigmoid()
+            self.alpha_beta_non_linearity = nn.Sigmoid()
+            self.q_non_linearity = nn.Sigmoid()
 
         # Instantiate dropout
         self.dropout = nn.Dropout(p=dropout)
@@ -117,7 +117,7 @@ class SequentialAutoencoder(pl.LightningModule):
             truth_obs = torch.masked_select(truth, mask)
             loss = nn.functional.poisson_nll_loss(logrates_obs, truth_obs)
         elif self.hparams.loss_type == 'zi_gamma':
-            loss = -torch.mean(zeroInflatedGamma(alpha_nl_obs, beta_nl_obs , q_nl_obs, self.hparams.s_min).log_prob_ZIG(x_obs))
+            loss = -torch.mean(zeroInflatedGamma(alpha_nl_obs, beta_nl_obs , q_nl_obs, torch.min(x_obs)).log_prob_ZIG(x_obs))
         # loss = nn.functional.mse_loss(logrates_obs, x_obs) # changed poisson loss to MSE loss
         self.log('train_loss', loss, on_epoch=True)
         self.log('train_nll', loss, on_epoch=True)
@@ -133,6 +133,8 @@ class SequentialAutoencoder(pl.LightningModule):
         rates = np.concatenate([*rates])
         # r2 = r2_score(truth, rates)
         # mse = np.average(np.square((truth - rates)/truth))
+        truth = truth/np.max(truth)
+        rates = rates/np.max(rates)
         mse = mean_squared_error(truth, rates)
         self.log('train_mse', mse, on_epoch=True)
         return loss
@@ -162,7 +164,7 @@ class SequentialAutoencoder(pl.LightningModule):
             truth_obs = torch.masked_select(truth, mask)
             loss = nn.functional.poisson_nll_loss(logrates_obs, truth_obs)
         elif self.hparams.loss_type == 'zi_gamma':
-            loss = -torch.mean(zeroInflatedGamma(alpha_nl_obs, beta_nl_obs , q_nl_obs, self.hparams.s_min).log_prob_ZIG(x_obs))
+            loss = -torch.mean(zeroInflatedGamma(alpha_nl_obs, beta_nl_obs , q_nl_obs, torch.min(x_obs)).log_prob_ZIG(x_obs))
         # loss = nn.functional.mse_loss(logrates_obs, x_obs) # changed poisson loss to MSE loss
         self.log('valid_loss', loss, on_epoch=True)
         self.log('valid_nll', loss, on_epoch=True)
@@ -177,6 +179,9 @@ class SequentialAutoencoder(pl.LightningModule):
         rates = np.concatenate([*rates])
         # r2 = r2_score(truth, rates)
         # mse = np.average(np.square((truth - rates)/truth))
+        # Scale the rates and truth between 0 and 1
+        truth = truth/np.max(truth)
+        rates = rates/np.max(rates)
         mse = mean_squared_error(truth, rates)
         self.log('valid_mse', mse, on_epoch=True)
         return loss
